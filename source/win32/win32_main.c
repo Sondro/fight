@@ -92,12 +92,50 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         global_window = window;
     }
     
+    struct
+    {
+        u32 width;
+        u32 height;
+        u8 *memory;
+        struct {
+            BITMAPINFOHEADER bmiHeader;
+            void *bmi_colors_pointer;
+        } bitmap_info;
+    } backbuffer = {0};
+    
+    // NOTE(rjf): Initialize backbuffer
+    {
+        backbuffer.width = BACKBUFFER_WIDTH;
+        backbuffer.height = BACKBUFFER_HEIGHT;
+        u32 size_of_backbuffer = backbuffer.width*backbuffer.height*3;
+        backbuffer.memory = VirtualAlloc(0,
+                                         size_of_backbuffer,
+                                         MEM_COMMIT | MEM_RESERVE,
+                                         PAGE_READWRITE);
+        
+        backbuffer.bitmap_info.bmiHeader.biSize = sizeof(backbuffer.bitmap_info);
+        backbuffer.bitmap_info.bmiHeader.biWidth = backbuffer.width;
+        backbuffer.bitmap_info.bmiHeader.biHeight = -backbuffer.height;
+        backbuffer.bitmap_info.bmiHeader.biPlanes = 1;
+        backbuffer.bitmap_info.bmiHeader.biBitCount = 24;
+        backbuffer.bitmap_info.bmiHeader.biCompression = BI_RGB;
+        backbuffer.bitmap_info.bmiHeader.biSizeImage = 0;
+        backbuffer.bitmap_info.bmiHeader.biXPelsPerMeter = 0;
+        backbuffer.bitmap_info.bmiHeader.biYPelsPerMeter = 0;
+        backbuffer.bitmap_info.bmiHeader.biClrUsed = 0;
+        backbuffer.bitmap_info.bmiHeader.biClrImportant = 0;
+        backbuffer.bitmap_info.bmi_colors_pointer = 0;
+    }
+    
     // NOTE(rjf): Initialize platform struct
     {
         global_platform.permanent_storage_size = PERMANENT_STORAGE_SIZE;
         global_platform.scratch_storage_size = SCRATCH_STORAGE_SIZE;
         global_platform.permanent_storage = VirtualAlloc(0, global_platform.permanent_storage_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         global_platform.scratch_storage = VirtualAlloc(0, global_platform.scratch_storage_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        global_platform.backbuffer_width = backbuffer.width;
+        global_platform.backbuffer_height = backbuffer.height;
+        global_platform.backbuffer = backbuffer.memory;
         
         if(!global_platform.permanent_storage ||
            !global_platform.scratch_storage)
@@ -110,6 +148,9 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
     GameInit(&global_platform);
     
     ShowWindow(global_window, command_show);
+    UpdateWindow(global_window);
+    
+    HDC window_device_context = GetDC(global_window);
     
     while(!global_platform.quit)
     {
@@ -121,6 +162,13 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         }
         
         GameUpdate();
+        
+        StretchDIBits(window_device_context,
+                      0, 0, global_platform.backbuffer_width, global_platform.backbuffer_height,
+                      0, 0, backbuffer.width, backbuffer.height,
+                      backbuffer.memory,
+                      (const BITMAPINFO *)&backbuffer.bitmap_info,
+                      DIB_RGB_COLORS, SRCCOPY);
     }
     
     quit:;
