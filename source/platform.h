@@ -1,3 +1,10 @@
+enum
+{
+#define Key(name, str) KEY_##name,
+#include "platform_key_list.inc"
+    KEY_MAX
+};
+
 typedef struct Platform
 {
     b32 quit;
@@ -13,5 +20,7 @@ typedef struct Platform
     
     f32 mouse_x;
     f32 mouse_y;
+    b32 key_down[KEY_MAX];
+    b32 key_pressed[KEY_MAX];
 }
 Platform;

@@ -24,6 +24,17 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
         global_platform.mouse_x = (f32)(l_param & 0x0000FFFF);
         global_platform.mouse_y = (f32)((l_param & 0xFFFF0000) >> 16);
     }
+    else if(message == WM_KEYDOWN || message == WM_KEYUP)
+    {
+        b32 key_is_down = message == WM_KEYDOWN;
+        u32 key_code = w_param;
+        u32 key_index = 0;
+        if(key_code >= 'A' && key_code <= 'Z') {
+            key_index = KEY_a + (key_code - 'A');
+        }
+        global_platform.key_pressed[key_index] = global_platform.key_down[key_index] ? key_is_down : 0;
+        global_platform.key_down[key_index] = key_is_down;
+    }
     else
     {
         result = DefWindowProc(window, message, w_param, l_param);
