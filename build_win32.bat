@@ -1,8 +1,8 @@
 @echo off
 
-set compiler_flags=   -I../source/ -nologo
-set linker_flags=     user32.lib
-set executable_name=  fight_win32.exe
+set compiler_flags= -I../source/ -nologo
+set linker_flags= user32.lib
+set executable_name=fight_win32.exe
 
 if not exist build mkdir build
 pushd build

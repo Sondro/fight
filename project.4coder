@@ -33,6 +33,19 @@ command_list = {
 			{ "./build_linux.sh", .os = "linux" },
 		},
 	},
+    
+    {
+		.name = "run",
+		.out = "*compilation*",
+		.footer_panel = true,
+		.save_dirty_files = false,
+		.cursor_at_end = false,
+		.cmd = {
+			{ "pushd build && fight_win32.exe && popd", .os = "win" },
+			{ "pushd build && ./fight_linux && popd", .os = "linux" },
+		},
+	},
 };
 
 fkey_command[1] = "build";
+fkey_command[3] = "run";
