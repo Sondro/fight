@@ -10,6 +10,8 @@
 #define Kilobytes(n) (Bytes(n)*1024)
 #define Megabytes(n) (Kilobytes(n)*1024)
 
+#define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
+
 typedef int8_t   i8;
 typedef int16_t  i16;
 typedef int32_t  i32;

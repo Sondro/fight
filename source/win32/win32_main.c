@@ -32,8 +32,11 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
         if(key_code >= 'A' && key_code <= 'Z') {
             key_index = KEY_a + (key_code - 'A');
         }
-        global_platform.key_pressed[key_index] = !global_platform.key_down[key_index] ? key_is_down : 0;
-        global_platform.key_down[key_index] = key_is_down;
+        if(key_index > 0)
+        {
+            global_platform.key_pressed[key_index] = !global_platform.key_down[key_index] ? key_is_down : 0;
+            global_platform.key_down[key_index] = key_is_down;
+        }
     }
     else
     {
