@@ -30,7 +30,7 @@ command_list = {
 		.cursor_at_end = false,
 		.cmd = {
 			{ "build_win32.bat", .os = "win" },
-			{ "build_linux.sh", .os = "linux" },
+			{ "./build_linux.sh", .os = "linux" },
 		},
 	},
 };
