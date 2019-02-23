@@ -9,5 +9,5 @@ if [ ! -d "build" ]; then
 fi
 
 pushd build
-gcc %compiler_flags% ../source/linux/linux_main.c %linker_flags% -o %executable_name%
+gcc $compiler_flags ../source/linux/linux_main.c $linker_flags -o $executable_name
 popd
