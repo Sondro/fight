@@ -11,7 +11,7 @@ global Platform global_platform = {0};
 global HWND global_window = {0};
 
 internal LRESULT
-Win32WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
+Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
     LRESULT result = {0};
     
@@ -19,9 +19,14 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     {
         global_platform.quit = 1;
     }
+    else if(message == WM_MOUSEMOVE)
+    {
+        global_platform.mouse_x = (f32)(l_param & 0x0000FFFF);
+        global_platform.mouse_y = (f32)((l_param & 0xFFFF0000) >> 16);
+    }
     else
     {
-        result = DefWindowProc(window, message, wParam, lParam);
+        result = DefWindowProc(window, message, w_param, l_param);
     }
     
     return result;
@@ -152,8 +157,16 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
     
     HDC window_device_context = GetDC(global_window);
     
+    LARGE_INTEGER performance_counter_frequency;
+    LARGE_INTEGER start_frame_time_data;
+    LARGE_INTEGER end_frame_time_data;
+    
+    QueryPerformanceFrequency(&performance_counter_frequency);
+    
     while(!global_platform.quit)
     {
+        QueryPerformanceCounter(&start_frame_time_data);
+        
         MSG message;
         while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE))
         {
@@ -169,6 +182,27 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
                       backbuffer.memory,
                       (const BITMAPINFO *)&backbuffer.bitmap_info,
                       DIB_RGB_COLORS, SRCCOPY);
+        
+        QueryPerformanceCounter(&end_frame_time_data);
+        
+        // NOTE(rjf): Wait, if necessary.
+        {
+            i64 frame_count = end_frame_time_data.QuadPart - start_frame_time_data.QuadPart;
+            i64 desired_frame_count = (1 / performance_counter_frequency.QuadPart) / FRAMES_PER_SECOND;
+            i64 counts_to_wait = desired_frame_count - frame_count;
+            
+            LARGE_INTEGER begin_wait_time_data;
+            LARGE_INTEGER end_wait_time_data;
+            
+            QueryPerformanceCounter(&begin_wait_time_data);
+            
+            while(counts_to_wait > 0)
+            {
+                QueryPerformanceCounter(&end_wait_time_data);
+                counts_to_wait -= (end_wait_time_data.QuadPart - begin_wait_time_data.QuadPart);
+                begin_wait_time_data = end_wait_time_data;
+            }
+        }
     }
     
     quit:;

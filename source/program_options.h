@@ -5,3 +5,4 @@
 #define BACKBUFFER_HEIGHT 720
 #define PERMANENT_STORAGE_SIZE Megabytes(16)
 #define SCRATCH_STORAGE_SIZE Megabytes(16)
+#define FRAMES_PER_SECOND (60.f)

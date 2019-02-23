@@ -10,5 +10,8 @@ typedef struct Platform
     u32 backbuffer_width;
     u32 backbuffer_height;
     u8 *backbuffer;
+    
+    f32 mouse_x;
+    f32 mouse_y;
 }
 Platform;
