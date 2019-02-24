@@ -13,11 +13,11 @@ ShaderInitFromData(const void *vert, u64 vert_len,
     GLint result = GL_FALSE;
     GLint code_len = 0;
     i32 info_log_length = 0;
-    char *code = 0;
+    const char *code = 0;
     
     // Compile vertex shader
     {
-        code = (char *)vert;
+        code = (const char *)vert;
         code_len = (GLint)CalculateCStringLength(code) -1;
         Log("Compiling vertex shader");
         glShaderSource(vertex_shader_id, 1, &code, &code_len);
@@ -39,7 +39,7 @@ ShaderInitFromData(const void *vert, u64 vert_len,
     
     // Compile fragment shader
     {
-        code = (char *)frag;
+        code = (const char *)frag;
         code_len = (GLint)CalculateCStringLength(code) - 1;
         Log("Compiling fragment shader");
         glShaderSource(fragment_shader_id, 1, &code, &code_len);
@@ -76,7 +76,7 @@ ShaderInitFromData(const void *vert, u64 vert_len,
         char name[64] = {0};
         char index_str[16] = {0};
         
-        code = (char *)info;
+        code = (const char *)info;
         
         for(u32 i = 0; i < info_len; ++i)
         {
