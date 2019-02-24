@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdarg.h>
 
 #define global static
 #define internal static

@@ -64,26 +64,24 @@ main(int argument_count, char **arguments)
             None
         };
         
-        global_platform.load_gl_proc = linux_window_data_load_gl_proc;
-        
-        int screen = DefaultScreen(window_data->display);
+        int screen = DefaultScreen(display);
         
         int element_count;
-        GLXFBConfig *framebuffer_config = glXChooseFBConfig(window_data->display, screen, gl_attributes, &element_count);
+        GLXFBConfig *framebuffer_config = glXChooseFBConfig(display, screen, gl_attributes, &element_count);
         if(!framebuffer_config)
         {
             goto quit;
         }
         
-        XVisualInfo *visual_info = glXChooseVisual(window_data->display, screen, gl_attributes);
+        XVisualInfo *visual_info = glXChooseVisual(display, screen, gl_attributes);
         
         if(!visual_info)
         {
             goto quit;
         }
         
-        Colormap color_map = XCreateColormap(window_data->display,
-                                             window_data->root,
+        Colormap color_map = XCreateColormap(display,
+                                             root,
                                              visual_info->visual,
                                              AllocNone);
         
@@ -95,16 +93,16 @@ main(int argument_count, char **arguments)
                                             ButtonPressMask   |
                                             ButtonReleaseMask);
         
-        const char *glx_extensions = glXQueryExtensionsString(window_data->display, screen);
+        const char *glx_extensions = glXQueryExtensionsString(display, screen);
         
         glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
         glXCreateContextAttribsARB = 
             (glXCreateContextAttribsARBProc)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
         
-        window_data->window = XCreateWindow(window_data->display,
-                                            window_data->root,
-                                            0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, visual_info->depth, 
-                                            InputOutput, visual_info->visual, CWColormap | CWEventMask, &set_window_attributes);
+        window = XCreateWindow(display,
+                               root,
+                               0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, visual_info->depth, 
+                               InputOutput, visual_info->visual, CWColormap | CWEventMask, &set_window_attributes);
         
         
         GLint gl3_attributes[] = {
@@ -114,26 +112,26 @@ main(int argument_count, char **arguments)
             None
         };
         
-        window_data->gl_context = glXCreateContextAttribsARB(window_data->display, *framebuffer_config,
-                                                             0, GL_TRUE, gl3_attributes);
+        gl_context = glXCreateContextAttribsARB(display, *framebuffer_config,
+                                                0, GL_TRUE, gl3_attributes);
         
-        if(!window_data->gl_context)
+        if(!gl_context)
         {
             goto quit;
         }
         
         XFree(visual_info);
         
-        if(!glXMakeCurrent(window_data->display,
-                           window_data->window,
-                           window_data->gl_context))
+        if(!glXMakeCurrent(display,
+                           window,
+                           gl_context))
         {
             goto quit;
         }
         
-        XMapWindow(window_data->display, window_data->window);
-        XStoreName(window_data->display, window_data->window, WINDOW_TITLE);
-        XFlush(window_data->display);
+        XMapWindow(display, window);
+        XStoreName(display, window, WINDOW_TITLE);
+        XFlush(display);
     }
     
     // NOTE(rjf): Initialize platform struct
@@ -152,11 +150,7 @@ main(int argument_count, char **arguments)
         }
     }
     
-    if(!LinuxInitOpenGL())
-    {
-        LinuxMessage("Fatal Error", "OpenGL initialization failure.");
-        goto quit;
-    }
+    
     
     GameInit(&global_platform);
     
@@ -189,19 +183,19 @@ main(int argument_count, char **arguments)
                         {
                             if(event.xbutton.button == Button1)
                             {
-                                global_platform.left_mouse_state |= 1<<31;
+                                //global_platform.left_mouse_state |= 1<<31;
                             }
                             else if(event.xbutton.button == Button3)
                             {
-                                global_platform.right_mouse_state |= 1<<31;
+                                //global_platform.right_mouse_state |= 1<<31;
                             }
                             else if(event.xbutton.button == Button4)
                             {
-                                global_platform.mouse_z = -1;
+                                //global_platform.mouse_z = -1;
                             }
                             else if(event.xbutton.button == Button5)
                             {
-                                global_platform.mouse_z = 1;
+                                //global_platform.mouse_z = 1;
                             }
                             break;
                         }

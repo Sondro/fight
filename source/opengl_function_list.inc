@@ -1,6 +1,8 @@
 OpenGLProc(USEPROGRAM, UseProgram)
 
+#ifndef BUILD_LINUX
 OpenGLProc(ACTIVETEXTURE, ActiveTexture)
+#endif
 OpenGLProc(GENERATEMIPMAP, GenerateMipmap)
 
 OpenGLProc(GENFRAMEBUFFERS, GenFramebuffers)

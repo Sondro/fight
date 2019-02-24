@@ -1,7 +1,7 @@
 #! /bin/bash
 
-compiler_flags="-I ../source/ -g"
-linker_flags="-lX11"
+compiler_flags="-I ../source/ -g -DBUILD_LINUX"
+linker_flags="-lX11 -lm -lGL"
 executable_name="fight_linux"
 
 if [ ! -d "build" ]; then

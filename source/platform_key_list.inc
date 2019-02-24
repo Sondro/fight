@@ -31,4 +31,7 @@ Key(up, "Up")
 Key(down, "Down")
 Key(escape, "Escape")
 Key(enter, "Enter")
+Key(space, "Space")
+Key(shift, "Shift")
+Key(ctrl, "Ctrl")
 #undef Key
