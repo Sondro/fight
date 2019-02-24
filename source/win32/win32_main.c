@@ -4,6 +4,10 @@
 #include "ext/wglext.h"
 #include "ext/glext.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include "ext/stb_image.h"
+
 #include "program_options.h"
 #include "language_layer.h"
 #include "platform.h"
@@ -223,6 +227,42 @@ Win32MessageBox(const char *title, const char *format, ...)
     MessageBoxA(0, text, title, MB_OK);
 }
 
+internal void
+Win32LoadEntireFile(const char *filename, void **data, u64 *len, b32 error_on_non_existence)
+{
+    *data = 0;
+    *len = 0;
+    
+    FILE *file = fopen(filename, "rb");
+    if(file)
+    {
+        fseek(file, 0, SEEK_END);
+        u64 file_size = (u64)ftell(file);
+        fseek(file, 0, SEEK_SET);
+        *data = malloc(file_size);
+        if(*data)
+        {
+            fread(*data, 1, file_size, file);
+            *len = file_size;
+        }
+        else
+        {
+            Win32MessageBox("File I/O Error", "Memory to load \"%s\" could not be allocated.", filename);
+        }
+        fclose(file);
+    }
+    else if(error_on_non_existence)
+    {
+        Win32MessageBox("File I/O Error", "\"%s\" could not be opened.", filename);
+    }
+}
+
+internal void
+Win32FreeFileData(void *data)
+{
+    free(data);
+}
+
 int
 WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int command_show)
 {
@@ -272,6 +312,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         global_platform.scratch_storage = VirtualAlloc(0, global_platform.scratch_storage_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         global_platform.LoadOpenGLProcedure = Win32OpenGLProcAddress;
         global_platform.OutputError = Win32MessageBox;
+        global_platform.LoadEntireFile = Win32LoadEntireFile;
         
         if(!global_platform.permanent_storage || !global_platform.scratch_storage)
         {

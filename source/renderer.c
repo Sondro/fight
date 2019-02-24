@@ -158,6 +158,41 @@ ShaderCleanUp(Shader *shader)
     }
 }
 
+internal Texture
+TextureInitFromData(void *data, u64 len)
+{
+    Texture t;
+    int w, h;
+    u8 *tex_data = stbi_load_from_memory((unsigned char *)data, (int)len,
+                                         &w, &h, 0,
+                                         STBI_rgb_alpha);
+    t.width = w;
+    t.height = h;
+    glGenTextures(1, &t.id);
+    glBindTexture(GL_TEXTURE_2D, t.id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, t.width, t.height, 0, GL_RGBA, 
+                 GL_UNSIGNED_BYTE, tex_data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    free(tex_data);
+    return t;
+}
+
+internal Texture
+TextureLoad(const char *filename)
+{
+    Texture texture = {0};
+    void *png_data = 0;
+    u64 png_data_len = 0;
+    platform->LoadEntireFile(filename, &png_data, &png_data_len, 0);
+    if(png_data && png_data_len)
+    {
+        texture = TextureInitFromData(png_data, png_data_len);
+        platform->FreeFileMemory(png_data);
+    }
+    return texture;
+}
+
 internal void
 _RendererFinishActiveRequest(Renderer *renderer)
 {
@@ -371,4 +406,58 @@ internal void
 RendererPushFilledRectS(Renderer *renderer, v2 pos, v2 size, v4 color)
 {
     RendererPushFilledRect(renderer, pos, size, color, color, color, color);
+}
+
+internal void
+RendererPushTexture(Renderer *renderer, Texture *texture,
+                    i32 flags, v4 source, v4 destination,
+                    f32 opacity) {
+    
+    assert(renderer->texture_instance_data_alloc_pos + RENDERER_OPENGL_BYTES_PER_TEXTURE <=
+           sizeof(renderer->texture_instance_data));
+    i32 request_type = RENDERER_REQUEST_texture;
+    
+    if(renderer->active_request.type != request_type ||
+       renderer->active_request.texture != texture)
+    {
+        _RendererFinishActiveRequest(renderer);
+        renderer->active_request.type = request_type;
+        renderer->active_request.data_offset = renderer->texture_instance_data_alloc_pos;
+        renderer->active_request.data_size = RENDERER_OPENGL_BYTES_PER_TEXTURE;
+        renderer->active_request.texture = texture;
+    }
+    else
+    {
+        renderer->active_request.data_size += RENDERER_OPENGL_BYTES_PER_TEXTURE;
+    }
+    
+    if(flags & RENDERER_FLIP_HORIZONTAL)
+    {
+        source.x += source.z;
+        source.z *= -1;
+    }
+    
+    if(flags & RENDERER_FLIP_VERTICAL)
+    {
+        source.y += source.w;
+        source.w *= -1;
+    }
+    
+    v2 scale = {
+        destination.z / source.z,
+        destination.w / source.w,
+    };
+    
+    GLubyte *data = (renderer->texture_instance_data +
+                     renderer->texture_instance_data_alloc_pos);
+    ((f32 *)data)[0] = source.x;
+    ((f32 *)data)[1] = source.y;
+    ((f32 *)data)[2] = source.z;
+    ((f32 *)data)[3] = source.w;
+    ((f32 *)data)[4] = destination.x;
+    ((f32 *)data)[5] = destination.y;
+    ((f32 *)data)[6] = scale.x;
+    ((f32 *)data)[7] = scale.y;
+    ((f32 *)data)[8] = opacity;
+    renderer->texture_instance_data_alloc_pos += RENDERER_OPENGL_BYTES_PER_TEXTURE;
 }

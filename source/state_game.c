@@ -15,6 +15,8 @@ enum
 {
     ATTACK_TYPE_jab,
     ATTACK_TYPE_ftilt,
+    ATTACK_TYPE_crouch_jab,
+    ATTACK_TYPE_crouch_ftilt,
 };
 
 global AttackType global_attack_types[] = {
@@ -22,23 +24,45 @@ global AttackType global_attack_types[] = {
     // NOTE(rjf): Jab
     {
         0.07f,
-        { 16, 16 },
-        { 0, 24 },
-        { 64, 0 },
+        { 24, 16 },
+        { 0, 0 },
+        { 28, 0 },
         0.034f,
         0.034f,
-        0.2f,
+        0.4f,
     },
     
     // NOTE(rjf): Forward Tilt
     {
         0.2f,
-        { 24, 24 },
-        { 0, 32 },
-        { 80, 0 },
+        { 38, 16 },
+        { 0, 0 },
+        { 48, 0 },
         0.08f,
         0.2f,
-        0.6f,
+        0.7f,
+    },
+    
+    // NOTE(rjf): Crouch Jab
+    {
+        0.07f,
+        { 48, 8 },
+        { 0, 0 },
+        { 20, 0 },
+        0.034f,
+        0.034f,
+        0.4f,
+    },
+    
+    // NOTE(rjf): Crouch F-Tilt
+    {
+        0.2f,
+        { 16, 16 },
+        { 0, -32 },
+        { 8, 0 },
+        0.08f,
+        0.2f,
+        0.7f,
     },
     
 };
@@ -84,6 +108,7 @@ typedef struct Box
         };
     };
     v2 velocity;
+    b32 on_ground;
 }
 Box;
 
@@ -157,6 +182,10 @@ CollideBoxWithStaticBox(Box *ptr_to_box, Box static_box)
             box.position.y += resolve_vector.y;
             box.velocity.x += resolve_vector.x / (core->delta_t / t);
             box.velocity.y += resolve_vector.y / (core->delta_t / t);
+            if(resolve_vector.y < 0.f)
+            {
+                box.on_ground |= 1;
+            }
             *ptr_to_box = box;
             break;
         }
@@ -189,6 +218,10 @@ CollideBoxWithHitBoxes(i32 origin_index, f32 *health, Box *ptr_to_box, HitBox *b
     for(u32 i = 0; i < box_count; ++i)
     {
         Box hit_box = boxes[i].box;
+        hit_box.x -= hit_box.size.x;
+        hit_box.y -= hit_box.size.y;
+        hit_box.size.x *= 2;
+        hit_box.size.y *= 2;
         if(origin_index != boxes[i].origin_index &&
            BoxesIntersect(check_box, hit_box, 0))
         {
@@ -196,8 +229,8 @@ CollideBoxWithHitBoxes(i32 origin_index, f32 *health, Box *ptr_to_box, HitBox *b
                                        v2(hit_box.x + hit_box.w/2, hit_box.y + hit_box.h/2)
                                        );
             
-            check_box.velocity.x += boxes[i].strength * (hit_vector.x * AbsoluteValueF(boxes[i].box.velocity.x) / 3.f);
-            check_box.velocity.y += boxes[i].strength * (hit_vector.y * AbsoluteValueF(boxes[i].box.velocity.y) / 3.f);
+            check_box.velocity.x += boxes[i].strength * (hit_vector.x * AbsoluteValueF(boxes[i].box.velocity.x) / 4.f);
+            check_box.velocity.y += boxes[i].strength * (hit_vector.y * AbsoluteValueF(boxes[i].box.velocity.y) / 4.f);
             
             *health -= 0.1f;
         }
@@ -261,6 +294,7 @@ PushHitBox(GameState *state, v2 pos, v2 size, v2 velocity, f32 strength, i32 ori
             velocity,
         },
         strength,
+        origin_index,
     };
     state->hit_boxes[state->hit_box_count++] = box;
 }
@@ -336,7 +370,9 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         CONTROL_move_left,
         CONTROL_jump,
         CONTROL_crouch,
-        CONTROL_attack,
+        CONTROL_attack_light,
+        CONTROL_attack_heavy,
+        CONTROL_air_dash,
         CONTROL_MAX
     };
     
@@ -347,30 +383,39 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
     {
         controls[CONTROL_move_right] = !!platform->key_down[KEY_d];
         controls[CONTROL_move_left] = !!platform->key_down[KEY_a];
-        controls[CONTROL_jump] = !!platform->key_down[KEY_w];
+        controls[CONTROL_jump] = !!platform->key_pressed[KEY_w];
         controls[CONTROL_crouch] = !!platform->key_down[KEY_s];
-        controls[CONTROL_attack] = !!platform->key_pressed[KEY_e];
+        controls[CONTROL_attack_light] = !!platform->key_pressed[KEY_e];
+        controls[CONTROL_attack_heavy] = !!platform->key_pressed[KEY_r];
+        controls[CONTROL_air_dash] = !!platform->key_pressed[KEY_shift];
     }
     // NOTE(rjf): Player index 2 (I guess?)
     else
     {
-        controls[CONTROL_move_right] = !!platform->key_down[KEY_right];
-        controls[CONTROL_move_left] = !!platform->key_down[KEY_left];
-        controls[CONTROL_jump] = !!platform->key_down[KEY_up];
-        controls[CONTROL_crouch] = !!platform->key_down[KEY_down];
-        controls[CONTROL_attack] = !!platform->key_pressed[KEY_l];
+        controls[CONTROL_move_right] = !!platform->key_down[KEY_l];
+        controls[CONTROL_move_left] = !!platform->key_down[KEY_j];
+        controls[CONTROL_jump] = !!platform->key_pressed[KEY_i];
+        controls[CONTROL_crouch] = !!platform->key_down[KEY_k];
+        controls[CONTROL_attack_light] = !!platform->key_pressed[KEY_o];
+        controls[CONTROL_attack_heavy] = !!platform->key_pressed[KEY_p];
     }
     
-    if(controls[CONTROL_move_right])
-    {
-        player->box.velocity.x += (1000 - player->box.velocity.x) * core->delta_t * 16.f;
-        player->direction = RIGHT;
-    }
     
-    else if(controls[CONTROL_move_left])
+    if(player->attack.stage == ATTACK_STAGE_ready)
     {
-        player->box.velocity.x += (-1000 - player->box.velocity.x) * core->delta_t * 16.f;
-        player->direction = LEFT;
+        
+        if(controls[CONTROL_move_right])
+        {
+            player->box.velocity.x += (1000 - player->box.velocity.x) * core->delta_t * 16.f;
+            player->direction = RIGHT;
+        }
+        
+        else if(controls[CONTROL_move_left])
+        {
+            player->box.velocity.x += (-1000 - player->box.velocity.x) * core->delta_t * 16.f;
+            player->direction = LEFT;
+        }
+        
     }
     
     if(controls[CONTROL_jump])
@@ -395,9 +440,30 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         }
     }
     
-    if(controls[CONTROL_attack] && player->attack.stage == ATTACK_STAGE_ready)
+    if(player->attack.stage == ATTACK_STAGE_ready)
     {
-        ExecuteAttack(&player->attack, ATTACK_TYPE_jab);
+        if(controls[CONTROL_crouch])
+        {
+            if(controls[CONTROL_attack_light])
+            {
+                ExecuteAttack(&player->attack, ATTACK_TYPE_crouch_jab);
+            }
+            else if(controls[CONTROL_attack_heavy])
+            {
+                ExecuteAttack(&player->attack, ATTACK_TYPE_crouch_ftilt);
+            }
+        }
+        else
+        {
+            if(controls[CONTROL_attack_light])
+            {
+                ExecuteAttack(&player->attack, ATTACK_TYPE_jab);
+            }
+            else if(controls[CONTROL_attack_heavy])
+            {
+                ExecuteAttack(&player->attack, ATTACK_TYPE_ftilt);
+            }
+        }
     }
 }
 
@@ -440,11 +506,16 @@ GameStateUpdate(GameState *state)
     for(int i = 0; i < ArrayCount(state->players); ++i)
     {
         LoadPlayerInput(state, &state->players[i], i);
-        
-        AttackUpdate(&state->players[i].attack, i, state->players[i].direction,
-                     state->players[i].box.position,
+        AttackUpdate(&state->players[i].attack, state->players[i].direction, i,
+                     v2(state->players[i].box.position.x + state->players[i].box.size.x/2,
+                        state->players[i].box.position.y + state->players[i].box.size.y/2),
                      state->players[i].box.velocity,
                      state);
+    }
+    
+    for(int i = 0; i < ArrayCount(state->players); ++i)
+    {
+        state->players[i].box.on_ground = 0;
         
         state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 16.f;
         state->players[i].box.velocity.y += 2000 * core->delta_t;
@@ -456,6 +527,7 @@ GameStateUpdate(GameState *state)
         state->players[i].box.x += state->players[i].box.velocity.x * core->delta_t;
         state->players[i].box.y += state->players[i].box.velocity.y * core->delta_t;
     }
+    
     
     CameraTargetPlayerMidpoint(&state->camera, state->players, ArrayCount(state->players));
     CameraUpdate(&state->camera);
@@ -481,8 +553,11 @@ GameStateUpdate(GameState *state)
         for(u32 i = 0; i < state->hit_box_count; ++i)
         {
             RendererPushFilledRectS(&core->renderer,
-                                    V2Subtract(state->hit_boxes[i].box.position, state->camera.position),
-                                    state->hit_boxes[i].box.size,
+                                    V2Subtract(v2(state->hit_boxes[i].box.position.x - state->hit_boxes[i].box.size.x,
+                                                  state->hit_boxes[i].box.position.y - state->hit_boxes[i].box.size.y),
+                                               state->camera.position),
+                                    v2(state->hit_boxes[i].box.size.x*2,
+                                       state->hit_boxes[i].box.size.y*2),
                                     v4(1, 0, 0, 1));
         }
     }

@@ -21,5 +21,7 @@ typedef struct Platform
     
     void *(*LoadOpenGLProcedure)(const char *name);
     void (*OutputError)(const char *title, const char *format, ...);
+    void (*LoadEntireFile)(const char *filename, void **data, u64 *len, b32 error_on_non_existence);
+    void (*FreeFileMemory)(void *data);
 }
 Platform;
