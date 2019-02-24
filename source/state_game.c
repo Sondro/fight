@@ -57,11 +57,11 @@ global AttackType global_attack_types[] = {
     // NOTE(rjf): Crouch F-Tilt
     {
         0.2f,
-        { 16, 16 },
-        { 0, -32 },
+        { 32, 32 },
+        { 0, -64 },
         { 8, 0 },
         0.08f,
-        0.2f,
+        0.4f,
         0.7f,
     },
     
@@ -198,9 +198,10 @@ typedef struct Player
     f32 health_target;
     Box box;
     v3 color;
-    i32 direction;
     Attack attack;
+    i32 direction;
     f32 stun_time;
+    Animation animation;
 }
 Player;
 
@@ -212,9 +213,20 @@ typedef struct HitBox
 }
 HitBox;
 
+typedef struct Camera
+{
+    v2 position;
+    v2 center_position;
+    v2 target;
+    f32 shake_magnitude;
+    f32 shake_sin_pos;
+}
+Camera;
+
 internal void
 CollideBoxWithHitBoxes(i32 origin_index, f32 *health, f32 *stun_time,
-                       Box *ptr_to_box, HitBox *boxes, u32 box_count)
+                       Box *ptr_to_box, HitBox *boxes, u32 box_count,
+                       Sound *hit_sound, Camera *camera)
 {
     Box check_box = *ptr_to_box;
     for(u32 i = 0; i < box_count; ++i)
@@ -236,18 +248,20 @@ CollideBoxWithHitBoxes(i32 origin_index, f32 *health, f32 *stun_time,
             
             *health -= 0.1f;
             *stun_time = 0.3f;
+            
+            f32 velocity_magnitude = boxes[i].strength * V2LengthSquared(hit_vector) / 700.f;
+            
+            AudioPlaySoundAtPoint(&core->audio, hit_sound, AUDIO_master,
+                                  1-velocity_magnitude,
+                                  velocity_magnitude*1.f + RandomF32(-0.2f, 0.2f),
+                                  v2(hit_box.x + hit_box.w/2,
+                                     hit_box.y + hit_box.h/2));
+            
+            camera->shake_magnitude += velocity_magnitude;
         }
     }
     *ptr_to_box = check_box;
 }
-
-typedef struct Camera
-{
-    v2 position;
-    v2 center_position;
-    v2 target;
-}
-Camera;
 
 internal void
 CameraUpdate(Camera *camera)
@@ -256,6 +270,10 @@ CameraUpdate(Camera *camera)
     camera->center_position.y += (camera->target.y - camera->center_position.y) * core->delta_t * 8.f;
     camera->position.x = camera->center_position.x - core->render_w/2;
     camera->position.y = camera->center_position.y - core->render_h/2;
+    
+    camera->shake_sin_pos += core->delta_t * 16.f;
+    camera->position.y += sinf(camera->shake_sin_pos) * 32.f * camera->shake_magnitude;
+    camera->shake_magnitude -= camera->shake_magnitude * core->delta_t;
 }
 
 internal void
@@ -293,6 +311,26 @@ typedef struct GameState
     HitBox hit_boxes[MAX_HIT_BOX];
     Box ground;
     Sound jump_sound;
+    Sound hit_sound;
+    Sound death_hit_sound;
+    Sound music_sound;
+    AudioSourceID background_music_source;
+    
+    struct
+    {
+        Texture texture;
+        AnimationType idle;
+        AnimationType walk;
+        AnimationType stand_block;
+        AnimationType crouch;
+        AnimationType jump;
+        AnimationType hurt;
+        AnimationType crouch_block;
+        AnimationType jab;
+        AnimationType heavy;
+        AnimationType crouch_heavy;
+        AnimationType crouch_jab;
+    } player_texture_data[2];
 }
 GameState;
 
@@ -374,7 +412,7 @@ AttackUpdate(Attack *attack, i32 direction, i32 origin_index, v2 anchor_pos,
 }
 
 internal void
-LoadPlayerInput(GameState *state, Player *player, i32 index)
+LoadPlayerInput(GameState *state, Player *player, i32 index, i32 texture_index)
 {
     
     enum
@@ -418,17 +456,24 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         controls[i] *= (player->stun_time < 0.001f);
     }
     
+    b32 on_ground = player->box.on_ground;
+    b32 walking   = 0;
+    b32 crouching = 0;
+    b32 jabbing   = player->attack.stage > 0 && (player->attack.type == ATTACK_TYPE_jab || player->attack.type == ATTACK_TYPE_crouch_jab);
+    b32 heavying  = player->attack.stage > 0 && (player->attack.type == ATTACK_TYPE_ftilt || player->attack.type == ATTACK_TYPE_crouch_ftilt);
+    
     if(player->attack.stage == ATTACK_STAGE_ready && player->box.on_ground)
     {
         
         if(controls[CONTROL_move_right])
         {
+            walking = 1;
             player->box.velocity.x += (750 - player->box.velocity.x) * core->delta_t * 16.f;
             player->direction = RIGHT;
         }
-        
         else if(controls[CONTROL_move_left])
         {
+            walking = 1;
             player->box.velocity.x += (-750 - player->box.velocity.x) * core->delta_t * 16.f;
             player->direction = LEFT;
         }
@@ -456,18 +501,21 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
     
     if(controls[CONTROL_crouch])
     {
-        if((i32)player->box.size.y == 64)
+        crouching = 1;
+        if((i32)player->box.size.y == 96)
         {
             player->box.y += 32;
-            player->box.size.y = 32;
+            player->box.size.y = 64;
+            player->animation.offset.y = -32;
         }
     }
     else
     {
-        if((i32)player->box.size.y == 32)
+        if((i32)player->box.size.y == 64)
         {
             player->box.y -= 32;
-            player->box.size.y = 64;
+            player->box.size.y = 96;
+            player->animation.offset.y = 0;
         }
     }
     
@@ -478,10 +526,12 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
             if(controls[CONTROL_attack_light])
             {
                 ExecuteAttack(&player->attack, ATTACK_TYPE_crouch_jab);
+                jabbing = 1;
             }
             else if(controls[CONTROL_attack_heavy])
             {
                 ExecuteAttack(&player->attack, ATTACK_TYPE_crouch_ftilt);
+                heavying = 1;
             }
         }
         else
@@ -489,11 +539,55 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
             if(controls[CONTROL_attack_light])
             {
                 ExecuteAttack(&player->attack, ATTACK_TYPE_jab);
+                jabbing = 1;
             }
             else if(controls[CONTROL_attack_heavy])
             {
                 ExecuteAttack(&player->attack, ATTACK_TYPE_ftilt);
+                heavying = 1;
             }
+        }
+    }
+    
+    if(!on_ground)
+    {
+        AnimationSet(&player->animation, &state->player_texture_data[texture_index].jump);
+    }
+    else
+    {
+        if(jabbing)
+        {
+            if(crouching)
+            {
+                AnimationSet(&player->animation, &state->player_texture_data[texture_index].crouch_jab);
+            }
+            else
+            {
+                AnimationSet(&player->animation, &state->player_texture_data[texture_index].jab);
+            }
+        }
+        else if(heavying)
+        {
+            if(crouching)
+            {
+                AnimationSet(&player->animation, &state->player_texture_data[texture_index].crouch_heavy);
+            }
+            else
+            {
+                AnimationSet(&player->animation, &state->player_texture_data[texture_index].heavy);
+            }
+        }
+        else if(crouching)
+        {
+            AnimationSet(&player->animation, &state->player_texture_data[texture_index].crouch);
+        }
+        else if(walking)
+        {
+            AnimationSet(&player->animation, &state->player_texture_data[texture_index].walk);
+        }
+        else
+        {
+            AnimationSet(&player->animation, &state->player_texture_data[texture_index].idle);
         }
     }
 }
@@ -501,13 +595,50 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
 internal void
 GameStateInit(GameState *state)
 {
-    state->players[0].box = Box(-256, -256, 48, 64);
+    // NOTE(rjf): Initialize player texture data
+    {
+        {
+            Texture *texture = &state->player_texture_data[0].texture;
+            state->player_texture_data[0].texture      = TextureLoad("data/player1.png");
+            state->player_texture_data[0].idle         = AnimationTypeInit(iv2(0, 0), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[0].walk         = AnimationTypeInit(iv2(24, 0), iv2(24, 48), 2, 0.1f, texture, 0);
+            state->player_texture_data[0].stand_block  = AnimationTypeInit(iv2(72, 0), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[0].crouch       = AnimationTypeInit(iv2(0, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[0].jump         = AnimationTypeInit(iv2(24, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[0].hurt         = AnimationTypeInit(iv2(48, 48), iv2(24, 48), 1, 0, texture, 1);
+            state->player_texture_data[0].crouch_block = AnimationTypeInit(iv2(72, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[0].jab          = AnimationTypeInit(iv2(0, 96), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[0].heavy        = AnimationTypeInit(iv2(48, 96), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[0].crouch_heavy = AnimationTypeInit(iv2(0, 144), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[0].crouch_jab   = AnimationTypeInit(iv2(48, 144), iv2(24, 48), 2, 0.16f, texture, 1);
+        }
+        
+        {
+            Texture *texture = &state->player_texture_data[1].texture;
+            state->player_texture_data[1].texture      = TextureLoad("data/player2.png");
+            state->player_texture_data[1].idle         = AnimationTypeInit(iv2(0, 0), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[1].walk         = AnimationTypeInit(iv2(24, 0), iv2(24, 48), 2, 0.1f, texture, 0);
+            state->player_texture_data[1].stand_block  = AnimationTypeInit(iv2(72, 0), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[1].crouch       = AnimationTypeInit(iv2(0, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[1].jump         = AnimationTypeInit(iv2(24, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[1].hurt         = AnimationTypeInit(iv2(48, 48), iv2(24, 48), 1, 0, texture, 1);
+            state->player_texture_data[1].crouch_block = AnimationTypeInit(iv2(72, 48), iv2(24, 48), 1, 0, texture, 0);
+            state->player_texture_data[1].jab          = AnimationTypeInit(iv2(0, 96), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[1].heavy        = AnimationTypeInit(iv2(48, 96), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[1].crouch_heavy = AnimationTypeInit(iv2(0, 144), iv2(24, 48), 2, 0.16f, texture, 1);
+            state->player_texture_data[1].crouch_jab   = AnimationTypeInit(iv2(48, 144), iv2(24, 48), 2, 0.16f, texture, 1);
+        }
+    }
+    
+    state->players[0].box = Box(-256, -256, 48, 96);
     state->players[0].box.velocity = v2(0, 0);
     state->players[0].color = v3(0.7f, 0.3f, 0.3f);
+    state->players[0].animation = AnimationInit(&state->player_texture_data[0].idle);
     
-    state->players[1].box = Box(256-48, -256, 48, 64);
+    state->players[1].box = Box(256-48, -256, 48, 96);
     state->players[1].box.velocity = v2(0, 0);
     state->players[1].color = v3(0.6f, 0.2f, 0.7f);
+    state->players[1].animation = AnimationInit(&state->player_texture_data[1].idle);
     
     state->hit_box_count = 0;
     
@@ -518,6 +649,13 @@ GameStateInit(GameState *state)
     state->ground = Box(-512, 96, 1024, 1024);
     
     state->jump_sound = SoundLoad("data/jump.ogg");
+    state->hit_sound = SoundLoad("data/hit.ogg");
+    state->death_hit_sound = SoundLoad("data/finish.ogg");
+    state->music_sound = SoundLoad("data/music.ogg");
+    
+    state->background_music_source = AudioReserveSource(&core->audio);
+    AudioPlaySource(&core->audio, state->background_music_source, &state->music_sound,
+                    AUDIO_master, 0.8f, 1.f, 1);
 }
 
 internal void
@@ -534,17 +672,32 @@ GameStateUpdate(GameState *state)
         core->next_state_type = STATE_title;
     }
     
-    if(platform->key_pressed[KEY_t])
+    if(platform->key_pressed[KEY_g])
     {
-        AudioPlaySound(&core->audio, &state->jump_sound,
-                       AUDIO_master, 1.f, 1.f);
+        
+        state->players[0].box = Box(-256, -256, 48, 96);
+        state->players[0].box.velocity = v2(0, 0);
+        state->players[0].color = v3(0.7f, 0.3f, 0.3f);
+        state->players[0].animation = AnimationInit(&state->player_texture_data[0].idle);
+        
+        state->players[1].box = Box(256-48, -256, 48, 96);
+        state->players[1].box.velocity = v2(0, 0);
+        state->players[1].color = v3(0.6f, 0.2f, 0.7f);
+        state->players[1].animation = AnimationInit(&state->player_texture_data[1].idle);
+        
+        state->hit_box_count = 0;
+        
+        CameraTargetPlayerMidpoint(&state->camera, state->players, ArrayCount(state->players));
+        state->camera.target.y -= 1000;
+        state->camera.center_position = state->camera.target;
+        
     }
     
     state->hit_box_count = 0;
     
     for(int i = 0; i < ArrayCount(state->players); ++i)
     {
-        LoadPlayerInput(state, &state->players[i], i);
+        LoadPlayerInput(state, &state->players[i], i, i == 0 ? 0 : 1);
         AttackUpdate(&state->players[i].attack, state->players[i].direction, i,
                      v2(state->players[i].box.position.x + state->players[i].box.size.x/2,
                         state->players[i].box.position.y + state->players[i].box.size.y/2),
@@ -567,12 +720,15 @@ GameStateUpdate(GameState *state)
         
         CollideBoxWithStaticBox(&state->players[i].box, state->ground);
         CollideBoxWithHitBoxes((i32)i, &state->players[i].health, &state->players[i].stun_time,
-                               &state->players[i].box, state->hit_boxes, state->hit_box_count);
+                               &state->players[i].box, state->hit_boxes, state->hit_box_count,
+                               &state->hit_sound, &state->camera);
         
         state->players[i].box.x += state->players[i].box.velocity.x * core->delta_t;
         state->players[i].box.y += state->players[i].box.velocity.y * core->delta_t;
         
         player->stun_time -= core->delta_t;
+        
+        AnimationUpdate(&player->animation);
     }
     
     
@@ -581,6 +737,62 @@ GameStateUpdate(GameState *state)
     
     // NOTE(rjf): Render everything
     {
+        RendererPushFilledRectS(&core->renderer,
+                                v2(0, 0),
+                                v2(core->render_w, core->render_h),
+                                v4(0.5f, 0.42f, 0.5f, 1.f));
+        
+        local_persist b32 first = 1;
+        local_persist struct
+        {
+            v4 rect;
+            f32 depth;
+        }
+        buildings[64];
+        if(first)
+        {
+            first = 0;
+            for(int i = 0; i < ArrayCount(buildings); ++i)
+            {
+                buildings[i].rect = v4(
+                    RandomF32(0, core->render_w),
+                    RandomF32(core->render_h/8, core->render_h),
+                    RandomF32(64, 256),
+                    1024
+                    );
+                buildings[i].depth = 0.5f + 0.5f*(i / (f32)ArrayCount(buildings));
+            }
+        }
+        
+        for(int i = 0; i < ArrayCount(buildings); ++i)
+        {
+            f32 depth = buildings[i].depth;
+            
+            v4 top_color = {
+                depth,
+                depth,
+                depth,
+                1.f
+            };
+            
+            v4 bottom_color = {
+                depth * (7/8),
+                depth * (7/8),
+                depth * (7/8),
+                1.f
+            };
+            
+            RendererPushFilledRect(&core->renderer,
+                                   V2Subtract(v2(buildings[i].rect.x, buildings[i].rect.y),
+                                              v2(state->camera.position.x * (1-depth) / 10.f, state->camera.position.y * (1-depth) / 10.f)),
+                                   v2(buildings[i].rect.z, buildings[i].rect.w),
+                                   top_color,
+                                   bottom_color,
+                                   top_color,
+                                   bottom_color);
+            
+        }
+        
         RendererPushFilledRect(&core->renderer,
                                V2Subtract(state->ground.position, state->camera.position),
                                state->ground.size,
@@ -591,13 +803,29 @@ GameStateUpdate(GameState *state)
         
         for(u32 i = 0; i < ArrayCount(state->players); ++i)
         {
+            Player *player = state->players + i; 
+#if 0
             RendererPushFilledRectS(&core->renderer,
                                     V2Subtract(state->players[i].box.position, state->camera.position),
                                     state->players[i].box.size,
                                     v4(state->players[i].color.r, state->players[i].color.g, state->players[i].color.b, 1.f));
+#endif
+            RendererPushTexture(&core->renderer, player->animation.type->texture,
+                                RENDERER_FLIP_HORIZONTAL * (player->direction == LEFT),
+                                v4(player->animation.type->pos.x +
+                                   player->animation.current_frame * player->animation.type->size.x,
+                                   player->animation.type->pos.y,
+                                   player->animation.type->size.x,
+                                   player->animation.type->size.y),
+                                v4(player->box.position.x - state->camera.position.x + player->animation.offset.x,
+                                   player->box.position.y - state->camera.position.y + player->animation.offset.y, 
+                                   player->animation.type->size.x*2,
+                                   player->animation.type->size.y*2),
+                                1.f);
         }
         
-        for(u32 i = 0; i < state->hit_box_count; ++i)
+        // for(u32 i = 0; i < state->hit_box_count; ++i)
+#if 0
         {
             RendererPushFilledRectS(&core->renderer,
                                     V2Subtract(v2(state->hit_boxes[i].box.position.x - state->hit_boxes[i].box.size.x,
@@ -607,5 +835,6 @@ GameStateUpdate(GameState *state)
                                        state->hit_boxes[i].box.size.y*2),
                                     v4(1, 0, 0, 1));
         }
+#endif
     }
 }

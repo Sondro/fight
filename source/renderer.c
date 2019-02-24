@@ -278,6 +278,46 @@ RendererInit(Renderer *renderer)
         glBindVertexArray(0);
     }
     
+    
+    // Initialize texture data
+    {
+        glGenVertexArrays(1, &renderer->texture_vao);
+        glBindVertexArray(renderer->texture_vao);
+        {
+            glGenBuffers(1, &renderer->texture_buffer);
+            glBindBuffer(GL_ARRAY_BUFFER, renderer->texture_buffer);
+            glBufferData(GL_ARRAY_BUFFER,
+                         sizeof(filled_quad_vertices),
+                         filled_quad_vertices,
+                         GL_STATIC_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+            
+            glGenBuffers(1, &renderer->texture_instance_buffer);
+            glBindBuffer(GL_ARRAY_BUFFER, renderer->texture_instance_buffer);
+            glBufferData(GL_ARRAY_BUFFER,
+                         sizeof(renderer->texture_instance_data),
+                         0,
+                         GL_DYNAMIC_DRAW);
+            
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, RENDERER_OPENGL_BYTES_PER_TEXTURE, 0);
+            glVertexAttribDivisor(1, 1);
+            
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, RENDERER_OPENGL_BYTES_PER_TEXTURE,
+                                  (void *)(sizeof(f32)*4));
+            glVertexAttribDivisor(2, 1);
+            
+            glEnableVertexAttribArray(3);
+            glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, RENDERER_OPENGL_BYTES_PER_TEXTURE,
+                                  (void *)(sizeof(f32)*8));
+            glVertexAttribDivisor(3, 1);
+        }
+        glBindVertexArray(0);
+    }
+    
+    
     for(u32 i = 0; i < RENDERER_OPENGL_DEFAULT_SHADER_MAX; ++i)
     {
         renderer->shaders[i] = ShaderInitFromData(global_default_opengl_shaders[i].vert, 0,
@@ -298,6 +338,7 @@ RendererBeginFrame(Renderer *renderer, f32 render_w, f32 render_h)
     renderer->projection_matrix = Mat4x4Orthographic(0, render_w, render_h, 0, 0, 100.f);
     
     renderer->filled_rect_instance_data_alloc_pos = 0;
+    renderer->texture_instance_data_alloc_pos = 0;
     renderer->active_request.type = 0;
     renderer->request_count = 0;
 }

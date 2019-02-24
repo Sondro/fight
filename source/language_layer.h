@@ -204,3 +204,9 @@ Mat4x4Orthographic(f32 left, f32 right, f32 bottom, f32 top, f32 near_depth, f32
     
     return result;
 }
+
+internal f32
+RandomF32(f32 low, f32 high)
+{ 
+    return low + ((f32)(((int)rand() % 1000) / 1000.f) * (high-low)); 
+}

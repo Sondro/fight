@@ -23,6 +23,7 @@ global Core *core = 0;
 global Platform *platform = 0;
 
 #include "assets.c"
+#include "animation.c"
 #include "debug.c"
 #include "renderer.c"
 #include "audio.c"
@@ -49,8 +50,8 @@ GameInit(Platform *platform_)
 internal void
 GameUpdate(void)
 {
-    core->render_w = 1280;
-    core->render_h = 720;
+    core->render_w = 1600;
+    core->render_h = 900;
     
     RendererBeginFrame(&core->renderer, core->render_w, core->render_h);
     StateUpdate(core->state_type, core->state_memory);
