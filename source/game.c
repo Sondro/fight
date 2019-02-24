@@ -1,4 +1,6 @@
+#include "assets.h"
 #include "renderer.h"
+#include "audio.h"
 
 typedef struct Core
 {
@@ -6,6 +8,7 @@ typedef struct Core
     f32 delta_t;
     
     Renderer renderer;
+    Audio audio;
     f32 render_w;
     f32 render_h;
     
@@ -19,8 +22,10 @@ Core;
 global Core *core = 0;
 global Platform *platform = 0;
 
+#include "assets.c"
 #include "debug.c"
 #include "renderer.c"
+#include "audio.c"
 #include "state.c"
 
 internal void
@@ -36,6 +41,7 @@ GameInit(Platform *platform_)
     core->next_state_type = STATE_null;
     core->state_memory = (u8 *)platform->permanent_storage + sizeof(Core);
     core->state_change_transition = 1.f;
+    AudioInit(&core->audio);
     RendererInit(&core->renderer);
     StateInit(core->state_type, core->state_memory);
 }
@@ -70,6 +76,8 @@ GameUpdate(void)
     {
         // TODO(rjf): Draw transition thing
     }
+    
+    AudioUpdate(&core->audio);
     
     // NOTE(rjf): Reset input stuff that should be reset.
     {

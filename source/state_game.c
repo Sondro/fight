@@ -200,6 +200,7 @@ typedef struct Player
     v3 color;
     i32 direction;
     Attack attack;
+    f32 stun_time;
 }
 Player;
 
@@ -212,7 +213,8 @@ typedef struct HitBox
 HitBox;
 
 internal void
-CollideBoxWithHitBoxes(i32 origin_index, f32 *health, Box *ptr_to_box, HitBox *boxes, u32 box_count)
+CollideBoxWithHitBoxes(i32 origin_index, f32 *health, f32 *stun_time,
+                       Box *ptr_to_box, HitBox *boxes, u32 box_count)
 {
     Box check_box = *ptr_to_box;
     for(u32 i = 0; i < box_count; ++i)
@@ -233,6 +235,7 @@ CollideBoxWithHitBoxes(i32 origin_index, f32 *health, Box *ptr_to_box, HitBox *b
             check_box.velocity.y += boxes[i].strength * (hit_vector.y * AbsoluteValueF(boxes[i].box.velocity.y) / 4.f);
             
             *health -= 0.1f;
+            *stun_time = 0.3f;
         }
     }
     *ptr_to_box = check_box;
@@ -249,8 +252,8 @@ Camera;
 internal void
 CameraUpdate(Camera *camera)
 {
-    camera->center_position.x += (camera->target.x - camera->center_position.x) * core->delta_t * 16.f;
-    camera->center_position.y += (camera->target.y - camera->center_position.y) * core->delta_t * 16.f;
+    camera->center_position.x += (camera->target.x - camera->center_position.x) * core->delta_t * 8.f;
+    camera->center_position.y += (camera->target.y - camera->center_position.y) * core->delta_t * 8.f;
     camera->position.x = camera->center_position.x - core->render_w/2;
     camera->position.y = camera->center_position.y - core->render_h/2;
 }
@@ -263,8 +266,17 @@ CameraTargetPlayerMidpoint(Camera *camera, Player *players, u32 player_count)
     
     for(u32 i = 0; i < player_count; ++i)
     {
-        x_sum += players[i].box.x + players[i].box.w/2;
-        y_sum += players[i].box.y + players[i].box.h/2;
+        v2 player_center_pos = {
+            players[i].box.x + players[i].box.w/2,
+            players[i].box.y + players[i].box.h/2,
+        };
+        
+        if(player_center_pos.x >= -1024 && player_center_pos.x <= 1024 &&
+           player_center_pos.y >= -1024 && player_center_pos.y <= 1024)
+        {
+            x_sum += player_center_pos.x;
+            y_sum += player_center_pos.y;
+        }
     }
     
     camera->target.x = x_sum / player_count;
@@ -280,6 +292,7 @@ typedef struct GameState
     u32 hit_box_count;
     HitBox hit_boxes[MAX_HIT_BOX];
     Box ground;
+    Sound jump_sound;
 }
 GameState;
 
@@ -400,6 +413,10 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         controls[CONTROL_attack_heavy] = !!platform->key_pressed[KEY_p];
     }
     
+    for(int i = 0; i < ArrayCount(controls); ++i)
+    {
+        controls[i] *= (player->stun_time < 0.001f);
+    }
     
     if(player->attack.stage == ATTACK_STAGE_ready && player->box.on_ground)
     {
@@ -421,11 +438,13 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
     {
         if(controls[CONTROL_move_right])
         {
+            player->box.velocity.x += (250 - player->box.velocity.x) * core->delta_t * 2.f;
             player->direction = RIGHT;
         }
         
         else if(controls[CONTROL_move_left])
         {
+            player->box.velocity.x += (-250 - player->box.velocity.x) * core->delta_t * 2.f;
             player->direction = LEFT;
         }
     }
@@ -497,6 +516,8 @@ GameStateInit(GameState *state)
     state->camera.center_position = state->camera.target;
     
     state->ground = Box(-512, 96, 1024, 1024);
+    
+    state->jump_sound = SoundLoad("data/jump.ogg");
 }
 
 internal void
@@ -511,6 +532,12 @@ GameStateUpdate(GameState *state)
     if(platform->key_pressed[KEY_escape])
     {
         core->next_state_type = STATE_title;
+    }
+    
+    if(platform->key_pressed[KEY_t])
+    {
+        AudioPlaySound(&core->audio, &state->jump_sound,
+                       AUDIO_master, 1.f, 1.f);
     }
     
     state->hit_box_count = 0;
@@ -533,21 +560,19 @@ GameStateUpdate(GameState *state)
         {
             state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 8.f;
         }
-        else
-        {
-            state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 2.f;
-        }
         
-        state->players[i].box.velocity.y += 2000 * core->delta_t;
+        state->players[i].box.velocity.y += 1500 * core->delta_t;
         
         player->box.on_ground = 0;
         
         CollideBoxWithStaticBox(&state->players[i].box, state->ground);
-        CollideBoxWithHitBoxes((i32)i, &state->players[i].health,
+        CollideBoxWithHitBoxes((i32)i, &state->players[i].health, &state->players[i].stun_time,
                                &state->players[i].box, state->hit_boxes, state->hit_box_count);
         
         state->players[i].box.x += state->players[i].box.velocity.x * core->delta_t;
         state->players[i].box.y += state->players[i].box.velocity.y * core->delta_t;
+        
+        player->stun_time -= core->delta_t;
     }
     
     

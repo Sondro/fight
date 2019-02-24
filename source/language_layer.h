@@ -14,6 +14,7 @@
 
 #define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
 #define CalculateCStringLength (u32)strlen
+#define MemorySet memset
 
 #define SquareRootF sqrtf
 #define AbsoluteValueF fabsf
