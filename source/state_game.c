@@ -401,21 +401,33 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
     }
     
     
-    if(player->attack.stage == ATTACK_STAGE_ready)
+    if(player->attack.stage == ATTACK_STAGE_ready && player->box.on_ground)
     {
         
         if(controls[CONTROL_move_right])
         {
-            player->box.velocity.x += (1000 - player->box.velocity.x) * core->delta_t * 16.f;
+            player->box.velocity.x += (750 - player->box.velocity.x) * core->delta_t * 16.f;
             player->direction = RIGHT;
         }
         
         else if(controls[CONTROL_move_left])
         {
-            player->box.velocity.x += (-1000 - player->box.velocity.x) * core->delta_t * 16.f;
+            player->box.velocity.x += (-750 - player->box.velocity.x) * core->delta_t * 16.f;
             player->direction = LEFT;
         }
         
+    }
+    else if(player->attack.stage == ATTACK_STAGE_ready)
+    {
+        if(controls[CONTROL_move_right])
+        {
+            player->direction = RIGHT;
+        }
+        
+        else if(controls[CONTROL_move_left])
+        {
+            player->direction = LEFT;
+        }
     }
     
     if(controls[CONTROL_jump])
@@ -515,10 +527,20 @@ GameStateUpdate(GameState *state)
     
     for(int i = 0; i < ArrayCount(state->players); ++i)
     {
-        state->players[i].box.on_ground = 0;
+        Player *player = state->players+i;
         
-        state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 16.f;
+        if(player->attack.stage == ATTACK_STAGE_ready && player->box.on_ground)
+        {
+            state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 8.f;
+        }
+        else
+        {
+            state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 2.f;
+        }
+        
         state->players[i].box.velocity.y += 2000 * core->delta_t;
+        
+        player->box.on_ground = 0;
         
         CollideBoxWithStaticBox(&state->players[i].box, state->ground);
         CollideBoxWithHitBoxes((i32)i, &state->players[i].health,
