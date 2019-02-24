@@ -1,5 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <gl/gl.h>
+#include "ext/wglext.h"
+#include "ext/glext.h"
 
 #include "program_options.h"
 #include "language_layer.h"
@@ -9,6 +12,126 @@
 
 global Platform global_platform = {0};
 global HWND global_window = {0};
+global HGLRC global_opengl_render_context = {0};
+
+internal void *
+Win32OpenGLProcAddress(const char *name)
+{
+    void *p = (void *)wglGetProcAddress(name);
+    if(!p || p == (void *)0x1 || p == (void *)0x2 || p == (void *)0x3 || p == (void *)-1)
+    {
+        return 0;
+    }
+    else
+    {
+        return p;
+    }
+}
+
+PFNWGLCHOOSEPIXELFORMATARBPROC     wglChoosePixelFormatARB;
+PFNWGLCREATECONTEXTATTRIBSARBPROC  wglCreateContextAttribsARB;
+PFNWGLMAKECONTEXTCURRENTARBPROC    wglMakeContextCurrentARB;
+PFNWGLSWAPINTERVALEXTPROC          wglSwapIntervalEXT;
+
+internal void
+Win32LoadWGLProcedures(HINSTANCE h_instance)
+{
+    wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)Win32OpenGLProcAddress("wglChoosePixelFormatARB");
+    wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)Win32OpenGLProcAddress("wglCreateContextAttribsARB");
+    wglMakeContextCurrentARB = (PFNWGLMAKECONTEXTCURRENTARBPROC)Win32OpenGLProcAddress("wglMakeContextCurrentARB");
+    wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)Win32OpenGLProcAddress("wglSwapIntervalEXT");
+}
+
+// Initialize OpenGL
+
+internal b32
+Win32InitOpenGL(HDC *device_context, HINSTANCE h_instance)
+{
+    
+    b32 result = 0;
+    
+    // NOTE(rjf): Set up pixel format for dummy context
+    int pixel_format = 0;
+    PIXELFORMATDESCRIPTOR pfd = {
+        sizeof(PIXELFORMATDESCRIPTOR),
+        1,
+        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        PFD_TYPE_RGBA,
+        32,
+        0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0, 0, 0, 0,
+        24,
+        8,
+        0,
+        PFD_MAIN_PLANE,
+        0,
+        0, 0, 0
+    };
+    pixel_format = ChoosePixelFormat(*device_context, &pfd);
+    
+    if(pixel_format)
+    {
+        SetPixelFormat(*device_context, pixel_format, &pfd);
+        HGLRC gl_dummy_render_context = wglCreateContext(*device_context);
+        wglMakeCurrent(*device_context, gl_dummy_render_context);
+        
+        Win32LoadWGLProcedures(h_instance);
+        
+        // NOTE(rjf): Set up real pixel format
+        {
+            int pf_attribs_i[] = {
+                WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+                WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+                WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+                WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+                WGL_COLOR_BITS_ARB, 32,
+                WGL_DEPTH_BITS_ARB, 24,
+                WGL_STENCIL_BITS_ARB, 8,
+                0
+            };
+            
+            UINT num_formats = 0;
+            wglChoosePixelFormatARB(*device_context,
+                                    pf_attribs_i,
+                                    0,
+                                    1,
+                                    &pixel_format,
+                                    &num_formats);
+        }
+        
+        if(pixel_format)
+        {
+            const int context_attribs[] = {
+                WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+                WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+                0
+            };
+            
+            global_opengl_render_context = wglCreateContextAttribsARB(*device_context,
+                                                                      gl_dummy_render_context,
+                                                                      context_attribs);
+            if(global_opengl_render_context)
+            {
+                wglMakeCurrent(*device_context, 0);
+                wglDeleteContext(gl_dummy_render_context);
+                wglMakeCurrent(*device_context, global_opengl_render_context);
+                wglSwapIntervalEXT(0);
+                result = 1;
+            }
+        }
+    }
+    
+    return result;
+}
+
+internal void
+Win32CleanUpOpenGL(HDC *device_context) {
+    wglMakeCurrent(*device_context, 0);
+    wglDeleteContext(global_opengl_render_context);
+}
 
 internal LRESULT
 Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
@@ -29,9 +152,19 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
         b32 key_is_down = message == WM_KEYDOWN;
         u32 key_code = w_param;
         u32 key_index = 0;
-        if(key_code >= 'A' && key_code <= 'Z') {
+        if(key_code >= 'A' && key_code <= 'Z')
+        {
             key_index = KEY_a + (key_code - 'A');
         }
+        else if(key_code == VK_ESCAPE)
+        {
+            key_index = KEY_escape;
+        }
+        else if(key_code == VK_RETURN)
+        {
+            key_index = KEY_enter;
+        }
+        
         if(key_index > 0)
         {
             global_platform.key_pressed[key_index] = !global_platform.key_down[key_index] ? key_is_down : 0;
@@ -111,65 +244,34 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         global_window = window;
     }
     
-    struct
-    {
-        u32 width;
-        u32 height;
-        u8 *memory;
-        struct {
-            BITMAPINFOHEADER bmiHeader;
-            void *bmi_colors_pointer;
-        } bitmap_info;
-    } backbuffer = {0};
-    
-    // NOTE(rjf): Initialize backbuffer
-    {
-        backbuffer.width = BACKBUFFER_WIDTH;
-        backbuffer.height = BACKBUFFER_HEIGHT;
-        u32 size_of_backbuffer = backbuffer.width*backbuffer.height*3;
-        backbuffer.memory = VirtualAlloc(0,
-                                         size_of_backbuffer,
-                                         MEM_COMMIT | MEM_RESERVE,
-                                         PAGE_READWRITE);
-        
-        backbuffer.bitmap_info.bmiHeader.biSize = sizeof(backbuffer.bitmap_info);
-        backbuffer.bitmap_info.bmiHeader.biWidth = backbuffer.width;
-        backbuffer.bitmap_info.bmiHeader.biHeight = -backbuffer.height;
-        backbuffer.bitmap_info.bmiHeader.biPlanes = 1;
-        backbuffer.bitmap_info.bmiHeader.biBitCount = 24;
-        backbuffer.bitmap_info.bmiHeader.biCompression = BI_RGB;
-        backbuffer.bitmap_info.bmiHeader.biSizeImage = 0;
-        backbuffer.bitmap_info.bmiHeader.biXPelsPerMeter = 0;
-        backbuffer.bitmap_info.bmiHeader.biYPelsPerMeter = 0;
-        backbuffer.bitmap_info.bmiHeader.biClrUsed = 0;
-        backbuffer.bitmap_info.bmiHeader.biClrImportant = 0;
-        backbuffer.bitmap_info.bmi_colors_pointer = 0;
-    }
-    
     // NOTE(rjf): Initialize platform struct
     {
         global_platform.permanent_storage_size = PERMANENT_STORAGE_SIZE;
         global_platform.scratch_storage_size = SCRATCH_STORAGE_SIZE;
         global_platform.permanent_storage = VirtualAlloc(0, global_platform.permanent_storage_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         global_platform.scratch_storage = VirtualAlloc(0, global_platform.scratch_storage_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        global_platform.backbuffer_width = backbuffer.width;
-        global_platform.backbuffer_height = backbuffer.height;
-        global_platform.backbuffer = backbuffer.memory;
+        global_platform.LoadOpenGLProcedure = Win32OpenGLProcAddress;
+        global_platform.OutputError = Win32MessageBox;
         
-        if(!global_platform.permanent_storage ||
-           !global_platform.scratch_storage)
+        if(!global_platform.permanent_storage || !global_platform.scratch_storage)
         {
             Win32MessageBox("Fatal Error", "Application memory allocation failure.");
             goto quit;
         }
     }
     
+    HDC window_device_context = GetDC(global_window);
+    
+    if(!Win32InitOpenGL(&window_device_context, instance))
+    {
+        Win32MessageBox("Fatal Error", "OpenGL initialization failure.");
+        goto quit;
+    }
+    
     GameInit(&global_platform);
     
     ShowWindow(global_window, command_show);
     UpdateWindow(global_window);
-    
-    HDC window_device_context = GetDC(global_window);
     
     LARGE_INTEGER performance_counter_frequency;
     LARGE_INTEGER start_frame_time_data;
@@ -189,13 +291,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         }
         
         GameUpdate();
-        
-        StretchDIBits(window_device_context,
-                      0, 0, global_platform.backbuffer_width, global_platform.backbuffer_height,
-                      0, 0, backbuffer.width, backbuffer.height,
-                      backbuffer.memory,
-                      (const BITMAPINFO *)&backbuffer.bitmap_info,
-                      DIB_RGB_COLORS, SRCCOPY);
+        wglSwapLayerBuffers(window_device_context, WGL_SWAP_MAIN_PLANE);
         
         QueryPerformanceCounter(&end_frame_time_data);
         

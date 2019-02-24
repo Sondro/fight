@@ -25,4 +25,6 @@ Key(w, "W")
 Key(x, "X")
 Key(y, "Y")
 Key(z, "Z")
+Key(escape, "Escape")
+Key(enter, "Enter")
 #undef Key

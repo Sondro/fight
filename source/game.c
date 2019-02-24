@@ -1,7 +1,13 @@
+#include "renderer.h"
+
 typedef struct Core
 {
     Platform *platform;
     f32 delta_t;
+    
+    Renderer renderer;
+    f32 render_w;
+    f32 render_h;
     
     f32 state_change_transition;
     i32 state_type;
@@ -13,12 +19,15 @@ Core;
 global Core *core = 0;
 global Platform *platform = 0;
 
-#include "render.c"
+#include "debug.c"
+#include "renderer.c"
 #include "state.c"
 
 internal void
 GameInit(Platform *platform_)
 {
+    Assert(sizeof(Core) <= platform_->permanent_storage_size);
+    
     core = platform_->permanent_storage;
     core->platform = platform_;
     platform = platform_;
@@ -27,15 +36,24 @@ GameInit(Platform *platform_)
     core->next_state_type = STATE_null;
     core->state_memory = (u8 *)platform->permanent_storage + sizeof(Core);
     core->state_change_transition = 1.f;
+    RendererInit(&core->renderer);
     StateInit(core->state_type, core->state_memory);
 }
 
 internal void
 GameUpdate(void)
 {
-    ClearBackbuffer();
+    core->render_w = 1280;
+    core->render_h = 720;
     
-    StateUpdate(core->state_type, core->state_memory);
+    RendererBeginFrame(&core->renderer, core->render_w, core->render_h);
+    // StateUpdate(core->state_type, core->state_memory);
+    RendererPushFilledRect(&core->renderer, v2(platform->mouse_x, platform->mouse_y), v2(64, 64),
+                           v4(1, 1, 1, 1),
+                           v4(1, 1, 1, 1),
+                           v4(1, 1, 1, 1),
+                           v4(1, 1, 1, 1));
+    RendererEndFrame(&core->renderer);
     
     if(core->next_state_type == STATE_null)
     {
@@ -55,8 +73,7 @@ GameUpdate(void)
     
     if(core->state_change_transition > 0.05f)
     {
-        DrawFilledRectangle(v2(0, 0), v2(platform->backbuffer_width, platform->backbuffer_height*core->state_change_transition),
-                            v3(0, 0, 0));
+        // TODO(rjf): Draw transition thing
     }
     
     // NOTE(rjf): Reset input stuff that should be reset.
