@@ -1,6 +1,6 @@
 #! /bin/bash
 
-compiler_flags="-I ../source/"
+compiler_flags="-I ../source/ -g"
 linker_flags="-lX11"
 executable_name="fight_linux"
 
