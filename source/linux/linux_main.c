@@ -64,24 +64,26 @@ main(int argument_count, char **arguments)
             None
         };
         
-        int screen = DefaultScreen(display);
+        global_platform.load_gl_proc = linux_window_data_load_gl_proc;
+        
+        int screen = DefaultScreen(window_data->display);
         
         int element_count;
-        GLXFBConfig *framebuffer_config = glXChooseFBConfig(display, screen, gl_attributes, &element_count);
+        GLXFBConfig *framebuffer_config = glXChooseFBConfig(window_data->display, screen, gl_attributes, &element_count);
         if(!framebuffer_config)
         {
             goto quit;
         }
         
-        XVisualInfo *visual_info = glXChooseVisual(display, screen, gl_attributes);
+        XVisualInfo *visual_info = glXChooseVisual(window_data->display, screen, gl_attributes);
         
         if(!visual_info)
         {
             goto quit;
         }
         
-        Colormap color_map = XCreateColormap(display,
-                                             root,
+        Colormap color_map = XCreateColormap(window_data->display,
+                                             window_data->root,
                                              visual_info->visual,
                                              AllocNone);
         
@@ -93,16 +95,16 @@ main(int argument_count, char **arguments)
                                             ButtonPressMask   |
                                             ButtonReleaseMask);
         
-        const char *glx_extensions = glXQueryExtensionsString(display, screen);
+        const char *glx_extensions = glXQueryExtensionsString(window_data->display, screen);
         
         glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
         glXCreateContextAttribsARB = 
             (glXCreateContextAttribsARBProc)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
         
-        window = XCreateWindow(display,
-                               root,
-                               0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, visual_info->depth, 
-                               InputOutput, visual_info->visual, CWColormap | CWEventMask, &set_window_attributes);
+        window_data->window = XCreateWindow(window_data->display,
+                                            window_data->root,
+                                            0, 0, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0, visual_info->depth, 
+                                            InputOutput, visual_info->visual, CWColormap | CWEventMask, &set_window_attributes);
         
         
         GLint gl3_attributes[] = {
@@ -112,26 +114,26 @@ main(int argument_count, char **arguments)
             None
         };
         
-        gl_context = glXCreateContextAttribsARB(display, *framebuffer_config,
-                                                0, GL_TRUE, gl3_attributes);
+        window_data->gl_context = glXCreateContextAttribsARB(window_data->display, *framebuffer_config,
+                                                             0, GL_TRUE, gl3_attributes);
         
-        if(!gl_context)
+        if(!window_data->gl_context)
         {
             goto quit;
         }
         
         XFree(visual_info);
         
-        if(!glXMakeCurrent(display,
-                           window,
-                           gl_context))
+        if(!glXMakeCurrent(window_data->display,
+                           window_data->window,
+                           window_data->gl_context))
         {
             goto quit;
         }
         
-        XMapWindow(display, window);
-        XStoreName(display, window, WINDOW_TITLE);
-        XFlush(display);
+        XMapWindow(window_data->display, window_data->window);
+        XStoreName(window_data->display, window_data->window, WINDOW_TITLE);
+        XFlush(window_data->display);
     }
     
     // NOTE(rjf): Initialize platform struct
@@ -150,7 +152,11 @@ main(int argument_count, char **arguments)
         }
     }
     
-    
+    if(!LinuxInitOpenGL())
+    {
+        LinuxMessage("Fatal Error", "OpenGL initialization failure.");
+        goto quit;
+    }
     
     GameInit(&global_platform);
     
@@ -183,19 +189,19 @@ main(int argument_count, char **arguments)
                         {
                             if(event.xbutton.button == Button1)
                             {
-                                //global_platform.left_mouse_state |= 1<<31;
+                                global_platform.left_mouse_state |= 1<<31;
                             }
                             else if(event.xbutton.button == Button3)
                             {
-                                //global_platform.right_mouse_state |= 1<<31;
+                                global_platform.right_mouse_state |= 1<<31;
                             }
                             else if(event.xbutton.button == Button4)
                             {
-                                //global_platform.mouse_z = -1;
+                                global_platform.mouse_z = -1;
                             }
                             else if(event.xbutton.button == Button5)
                             {
-                                //global_platform.mouse_z = 1;
+                                global_platform.mouse_z = 1;
                             }
                             break;
                         }
@@ -280,12 +286,12 @@ main(int argument_count, char **arguments)
         }
         
         GameUpdate();
-        
         glXSwapBuffers(display, window);
+        
+        clock_gettime(CLOCK_MONOTONIC, &end_frame_time_spec);
         
         // NOTE(rjf): End frame, and wait if necessary.
         {
-            clock_gettime(CLOCK_MONOTONIC, &end_frame_time_spec);
             i64 elapsed_seconds = end_frame_time_spec.tv_sec - begin_frame_time_spec.tv_sec;
             i64 elapsed_nanoseconds = end_frame_time_spec.tv_nsec - begin_frame_time_spec.tv_nsec;
             i64 frame_nanoseconds = elapsed_seconds * 1000000000 + elapsed_nanoseconds;

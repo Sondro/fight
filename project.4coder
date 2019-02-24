@@ -19,9 +19,6 @@ load_paths = {
 	{
 		{ {"."}, .recursive = true, .relative = true }, .os = "win"
 	},
-	{
-		{ {"."}, .recursive = true, .relative = true }, .os 			= "linux"
-	}
 };
 
 command_list = {

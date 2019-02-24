@@ -330,7 +330,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
             {
                 QueryPerformanceCounter(&end_wait_time_data);
                 counts_to_wait -= (end_wait_time_data.QuadPart - begin_wait_time_data.QuadPart);
-                QueryPerformanceCounter(&begin_wait_time_data);
+                begin_wait_time_data = end_wait_time_data;
             }
         }
     }

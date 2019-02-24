@@ -4,8 +4,7 @@ typedef struct AttackType
     f32 start_up;
     v2 size;
     v2 offset;
-    v2 right_offset;
-    v2 left_offset;
+    v2 directional_offset;
     f32 duration;
     f32 recovery;
     f32 strength;
@@ -24,9 +23,8 @@ global AttackType global_attack_types[] = {
     {
         0.07f,
         { 16, 16 },
-        {0},
-        {0},
-        {0},
+        { 0, 24 },
+        { 64, 0 },
         0.034f,
         0.034f,
         0.2f,
@@ -36,9 +34,8 @@ global AttackType global_attack_types[] = {
     {
         0.2f,
         { 24, 24 },
-        {0},
-        {0},
-        {0},
+        { 0, 32 },
+        { 80, 0 },
         0.08f,
         0.2f,
         0.6f,
@@ -57,6 +54,7 @@ enum
 typedef struct Attack
 {
     i32 stage;
+    i32 type;
     f32 start_up_time_left;
     v2 size;
     f32 duration_left;
@@ -271,6 +269,7 @@ internal void
 ExecuteAttack(Attack *attack, i32 attack_type)
 {
     attack->stage = ATTACK_STAGE_start_up;
+    attack->type = attack_type;
     attack->start_up_time_left = global_attack_types[attack_type].start_up;
     attack->size = global_attack_types[attack_type].size;
     attack->duration_left = global_attack_types[attack_type].duration;
@@ -279,7 +278,8 @@ ExecuteAttack(Attack *attack, i32 attack_type)
 }
 
 internal void
-AttackUpdate(Attack *attack, i32 origin_index, v2 anchor_pos, v2 velocity, GameState *state)
+AttackUpdate(Attack *attack, i32 direction, i32 origin_index, v2 anchor_pos,
+             v2 velocity, GameState *state)
 {
     switch(attack->stage)
     {
@@ -297,7 +297,13 @@ AttackUpdate(Attack *attack, i32 origin_index, v2 anchor_pos, v2 velocity, GameS
         case ATTACK_STAGE_active:
         {
             attack->duration_left -= core->delta_t;
-            PushHitBox(state, anchor_pos, attack->size, velocity,
+            PushHitBox(state,
+                       V2Add(anchor_pos,
+                             v2(global_attack_types[attack->type].offset.x +
+                                global_attack_types[attack->type].directional_offset.x * (direction == LEFT ? -1 : 1),
+                                global_attack_types[attack->type].offset.y +
+                                global_attack_types[attack->type].directional_offset.y)),
+                       attack->size, velocity,
                        attack->strength, origin_index);
             if(attack->duration_left <= 0.f)
             {
@@ -358,11 +364,13 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
     if(controls[CONTROL_move_right])
     {
         player->box.velocity.x += (1000 - player->box.velocity.x) * core->delta_t * 16.f;
+        player->direction = RIGHT;
     }
     
     else if(controls[CONTROL_move_left])
     {
         player->box.velocity.x += (-1000 - player->box.velocity.x) * core->delta_t * 16.f;
+        player->direction = LEFT;
     }
     
     if(controls[CONTROL_jump])
@@ -433,7 +441,8 @@ GameStateUpdate(GameState *state)
     {
         LoadPlayerInput(state, &state->players[i], i);
         
-        AttackUpdate(&state->players[i].attack, i, state->players[i].box.position,
+        AttackUpdate(&state->players[i].attack, i, state->players[i].direction,
+                     state->players[i].box.position,
                      state->players[i].box.velocity,
                      state);
         
