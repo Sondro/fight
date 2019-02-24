@@ -180,6 +180,10 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
         {
             key_index = KEY_enter;
         }
+        else if(key_code == VK_SPACE)
+        {
+            key_index = KEY_space;
+        }
         
         if(key_index > 0)
         {
