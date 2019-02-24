@@ -47,12 +47,7 @@ GameUpdate(void)
     core->render_h = 720;
     
     RendererBeginFrame(&core->renderer, core->render_w, core->render_h);
-    // StateUpdate(core->state_type, core->state_memory);
-    RendererPushFilledRect(&core->renderer, v2(platform->mouse_x, platform->mouse_y), v2(64, 64),
-                           v4(1, 1, 1, 1),
-                           v4(1, 1, 1, 1),
-                           v4(1, 1, 1, 1),
-                           v4(1, 1, 1, 1));
+    StateUpdate(core->state_type, core->state_memory);
     RendererEndFrame(&core->renderer);
     
     if(core->next_state_type == STATE_null)

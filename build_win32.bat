@@ -1,6 +1,6 @@
 @echo off
 
-set compiler_flags= -I../source/ -nologo
+set compiler_flags= -I../source/ -nologo /Zi
 set linker_flags= user32.lib gdi32.lib opengl32.lib
 set executable_name=fight_win32.exe
 

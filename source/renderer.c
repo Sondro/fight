@@ -50,7 +50,8 @@ ShaderInitFromData(const void *vert, u64 vert_len,
     {
         glGetShaderiv(fragment_shader_id, GL_COMPILE_STATUS, &result);
         glGetShaderiv(fragment_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
-        if(info_log_length > 1) {
+        if(info_log_length > 1)
+        {
             char fragment_shader_error[1024] = {0};
             glGetShaderInfoLog(fragment_shader_id, sizeof(fragment_shader_error), 0, fragment_shader_error);
             Log("%s", fragment_shader_error);
@@ -118,11 +119,13 @@ ShaderInitFromData(const void *vert, u64 vert_len,
                         memset(index_str, 0, 16);
                         strncpy(index_str, code + read_start, (i-read_start) < 16 ? i-read_start : 16);
                         
-                        if(in) {
+                        if(in)
+                        {
                             Log("Binding \"%s\" for input at index %i", name, atoi(index_str));
                             glBindAttribLocation(program_id, atoi(index_str), name);
                         }
-                        else {
+                        else
+                        {
                             Log("Binding \"%s\" for output at index %i", name, atoi(index_str));
                             glBindFragDataLocation(program_id, atoi(index_str), name);
                         }
@@ -172,12 +175,12 @@ RendererInit(Renderer *renderer)
 #define OpenGLProc(type, name) gl##name = platform->LoadOpenGLProcedure("gl" #name);
 #include "opengl_function_list.inc"
     
-    GLfloat filled_quad_vertices[8] = {0};
-    
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
+    
+    GLfloat filled_quad_vertices[8] = {0};
     
     // Initialize primitive vertices
     {
@@ -270,11 +273,14 @@ RendererEndFrame(Renderer *renderer)
     
     _RendererFinishActiveRequest(renderer);
     
-    for(u32 i = 0; i < renderer->request_count; ++i) {
+    for(u32 i = 0; i < renderer->request_count; ++i)
+    {
         RendererRequest *request = renderer->requests + i;
-        switch(request->type) {
+        switch(request->type)
+        {
             
-            case RENDERER_REQUEST_filled_rect: {
+            case RENDERER_REQUEST_filled_rect:
+            {
                 // NOTE(rjf): Upload data
                 {
                     glBindBuffer(GL_ARRAY_BUFFER, renderer->filled_rect_instance_buffer);
@@ -284,8 +290,6 @@ RendererEndFrame(Renderer *renderer)
                 }
                 
                 GLuint shader = renderer->shaders[RENDERER_OPENGL_SHADER_filled_rect].id;
-                
-                
                 
                 glUseProgram(shader);
                 glBindVertexArray(renderer->filled_rect_vao);

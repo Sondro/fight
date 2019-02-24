@@ -17,6 +17,9 @@
 #define SquareRootF sqrtf
 #define AbsoluteValueF fabsf
 
+#define RIGHT 0
+#define LEFT  1
+
 typedef int8_t   i8;
 typedef int16_t  i16;
 typedef int32_t  i32;
@@ -45,6 +48,13 @@ V2Init(f32 x, f32 y)
 {
     v2 v = { x, y };
     return v;
+}
+
+internal v2
+V2Add(v2 a, v2 b)
+{
+    v2 c = { a.x + b.x, a.y + b.y };
+    return c;
 }
 
 internal v2

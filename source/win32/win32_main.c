@@ -160,6 +160,22 @@ Win32WindowProcedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
         {
             key_index = KEY_escape;
         }
+        else if(key_code == VK_LEFT)
+        {
+            key_index = KEY_left;
+        }
+        else if(key_code == VK_UP)
+        {
+            key_index = KEY_up;
+        }
+        else if(key_code == VK_RIGHT)
+        {
+            key_index = KEY_right;
+        }
+        else if(key_code == VK_DOWN)
+        {
+            key_index = KEY_down;
+        }
         else if(key_code == VK_RETURN)
         {
             key_index = KEY_enter;
@@ -298,7 +314,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         // NOTE(rjf): Wait, if necessary.
         {
             i64 frame_count = end_frame_time_data.QuadPart - start_frame_time_data.QuadPart;
-            i64 desired_frame_count = (1 / performance_counter_frequency.QuadPart) / FRAMES_PER_SECOND;
+            i64 desired_frame_count = (f32)performance_counter_frequency.QuadPart / FRAMES_PER_SECOND;
             i64 counts_to_wait = desired_frame_count - frame_count;
             
             LARGE_INTEGER begin_wait_time_data;
@@ -310,7 +326,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
             {
                 QueryPerformanceCounter(&end_wait_time_data);
                 counts_to_wait -= (end_wait_time_data.QuadPart - begin_wait_time_data.QuadPart);
-                begin_wait_time_data = end_wait_time_data;
+                QueryPerformanceCounter(&begin_wait_time_data);
             }
         }
     }
