@@ -3,6 +3,9 @@ typedef struct AttackType
 {
     f32 start_up;
     v2 size;
+    v2 offset;
+    v2 right_offset;
+    v2 left_offset;
     f32 duration;
     f32 recovery;
     f32 strength;
@@ -21,6 +24,9 @@ global AttackType global_attack_types[] = {
     {
         0.07f,
         { 16, 16 },
+        {0},
+        {0},
+        {0},
         0.034f,
         0.034f,
         0.2f,
@@ -30,6 +36,9 @@ global AttackType global_attack_types[] = {
     {
         0.2f,
         { 24, 24 },
+        {0},
+        {0},
+        {0},
         0.08f,
         0.2f,
         0.6f,
@@ -39,6 +48,7 @@ global AttackType global_attack_types[] = {
 
 enum
 {
+    ATTACK_STAGE_ready,
     ATTACK_STAGE_start_up,
     ATTACK_STAGE_active,
     ATTACK_STAGE_recovery,
@@ -269,6 +279,48 @@ ExecuteAttack(Attack *attack, i32 attack_type)
 }
 
 internal void
+AttackUpdate(Attack *attack, i32 origin_index, v2 anchor_pos, v2 velocity, GameState *state)
+{
+    switch(attack->stage)
+    {
+        
+        case ATTACK_STAGE_start_up:
+        {
+            attack->start_up_time_left -= core->delta_t;
+            if(attack->start_up_time_left <= 0.f)
+            {
+                attack->stage = ATTACK_STAGE_active;
+            }
+            break;
+        }
+        
+        case ATTACK_STAGE_active:
+        {
+            attack->duration_left -= core->delta_t;
+            PushHitBox(state, anchor_pos, attack->size, velocity,
+                       attack->strength, origin_index);
+            if(attack->duration_left <= 0.f)
+            {
+                attack->stage = ATTACK_STAGE_recovery;
+            }
+            break;
+        }
+        
+        case ATTACK_STAGE_recovery:
+        {
+            attack->recovery_left -= core->delta_t;
+            if(attack->recovery_left <= 0.f)
+            {
+                attack->stage = ATTACK_STAGE_ready;
+            }
+            break;
+        }
+        
+        default: break;
+    }
+}
+
+internal void
 LoadPlayerInput(GameState *state, Player *player, i32 index)
 {
     
@@ -291,7 +343,7 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         controls[CONTROL_move_left] = !!platform->key_down[KEY_a];
         controls[CONTROL_jump] = !!platform->key_down[KEY_w];
         controls[CONTROL_crouch] = !!platform->key_down[KEY_s];
-        controls[CONTROL_attack] = !!platform->key_down[KEY_e];
+        controls[CONTROL_attack] = !!platform->key_pressed[KEY_e];
     }
     // NOTE(rjf): Player index 2 (I guess?)
     else
@@ -300,7 +352,7 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         controls[CONTROL_move_left] = !!platform->key_down[KEY_left];
         controls[CONTROL_jump] = !!platform->key_down[KEY_up];
         controls[CONTROL_crouch] = !!platform->key_down[KEY_down];
-        controls[CONTROL_attack] = !!platform->key_down[KEY_l];
+        controls[CONTROL_attack] = !!platform->key_pressed[KEY_l];
     }
     
     if(controls[CONTROL_move_right])
@@ -335,7 +387,7 @@ LoadPlayerInput(GameState *state, Player *player, i32 index)
         }
     }
     
-    if(controls[CONTROL_attack])
+    if(controls[CONTROL_attack] && player->attack.stage == ATTACK_STAGE_ready)
     {
         ExecuteAttack(&player->attack, ATTACK_TYPE_jab);
     }
@@ -380,6 +432,10 @@ GameStateUpdate(GameState *state)
     for(int i = 0; i < ArrayCount(state->players); ++i)
     {
         LoadPlayerInput(state, &state->players[i], i);
+        
+        AttackUpdate(&state->players[i].attack, i, state->players[i].box.position,
+                     state->players[i].box.velocity,
+                     state);
         
         state->players[i].box.velocity.x -= state->players[i].box.velocity.x * core->delta_t * 16.f;
         state->players[i].box.velocity.y += 2000 * core->delta_t;
