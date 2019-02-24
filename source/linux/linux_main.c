@@ -8,6 +8,10 @@
 #define GLX_CONTEXT_MINOR_VERSION_ARB       0x2092
 typedef GLXContext (*glXCreateContextAttribsARBProc)(Display *, GLXFBConfig, GLXContext, Bool, const int *);
 
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include "ext/stb_image.h"
+
 #include "program_options.h"
 #include "language_layer.h"
 #include "platform.h"
@@ -32,6 +36,42 @@ LinuxLoadOpenGLProc(const char *name)
 {
     void *addr = glXGetProcAddressARB((const GLubyte *)name);
     return addr;
+}
+
+internal void
+LinuxLoadEntireFile(const char *filename, void **data, u64 *len, b32 error_on_non_existence)
+{
+    *data = 0;
+    *len = 0;
+    
+    FILE *file = fopen(filename, "rb");
+    if(file)
+    {
+        fseek(file, 0, SEEK_END);
+        u64 file_size = (u64)ftell(file);
+        fseek(file, 0, SEEK_SET);
+        *data = malloc(file_size);
+        if(*data)
+        {
+            fread(*data, 1, file_size, file);
+            *len = file_size;
+        }
+        else
+        {
+            LinuxMessage("File I/O Error", "Memory to load \"%s\" could not be allocated.", filename);
+        }
+        fclose(file);
+    }
+    else if(error_on_non_existence)
+    {
+        LinuxMessage("File I/O Error", "\"%s\" could not be opened.", filename);
+    }
+}
+
+internal void
+LinuxFreeFileData(void *data)
+{
+    free(data);
 }
 
 int
@@ -142,6 +182,8 @@ main(int argument_count, char **arguments)
         global_platform.scratch_storage = calloc(1, global_platform.scratch_storage_size);
         global_platform.LoadOpenGLProcedure = LinuxLoadOpenGLProc;
         global_platform.OutputError = LinuxMessage;
+        global_platform.LoadEntireFile = LinuxLoadEntireFile;
+        global_platform.FreeFileData = LinuxFreeFileData;
         
         if(!global_platform.permanent_storage || !global_platform.scratch_storage)
         {

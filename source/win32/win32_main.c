@@ -313,6 +313,7 @@ WinMain(HINSTANCE instance, HINSTANCE previous_instance, LPSTR command_line, int
         global_platform.LoadOpenGLProcedure = Win32OpenGLProcAddress;
         global_platform.OutputError = Win32MessageBox;
         global_platform.LoadEntireFile = Win32LoadEntireFile;
+        global_platform.FreeFileData = Win32FreeFileData;
         
         if(!global_platform.permanent_storage || !global_platform.scratch_storage)
         {

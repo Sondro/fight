@@ -188,7 +188,7 @@ TextureLoad(const char *filename)
     if(png_data && png_data_len)
     {
         texture = TextureInitFromData(png_data, png_data_len);
-        platform->FreeFileMemory(png_data);
+        platform->FreeFileData(png_data);
     }
     return texture;
 }
