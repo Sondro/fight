@@ -346,6 +346,51 @@ RendererEndFrame(Renderer *renderer)
                 break;
             }
             
+            case RENDERER_REQUEST_texture:
+            {
+                
+                // NOTE(rjf): Upload data
+                {
+                    glBindBuffer(GL_ARRAY_BUFFER, renderer->texture_instance_buffer);
+                    glBufferSubData(GL_ARRAY_BUFFER, 0, request->data_size,
+                                    renderer->texture_instance_data + request->data_offset);
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
+                }
+                
+                GLuint shader = renderer->shaders[RENDERER_OPENGL_SHADER_texture].id;
+                glBindVertexArray(renderer->texture_vao);
+                glUseProgram(shader);
+                {
+                    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"),
+                                       1, GL_FALSE,
+                                       &renderer->projection_matrix.elements[0][0]);
+                    
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, request->texture->id);
+                    
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                    glUniform1i(glGetUniformLocation(shader, "tex"), 0);
+                    glUniform2f(glGetUniformLocation(shader, "tex_resolution"),
+                                (f32)request->texture->width,
+                                (f32)request->texture->height);
+                    
+                    GLint first = 0;
+                    GLsizei count = 4;
+                    GLsizei instance_count = request->data_size / RENDERER_OPENGL_BYTES_PER_TEXTURE;
+                    
+                    glDrawArraysInstanced(GL_TRIANGLE_STRIP,
+                                          first,
+                                          count,
+                                          instance_count);
+                }
+                glBindVertexArray(0);
+                
+                break;
+            }
+            
             default: break;
         }
     }
